@@ -287,8 +287,13 @@ class AutoEP:
     """Automatic Expert Parallelism: detect and replace MoE layers."""
 
     def __init__(self, model: nn.Module, config: AutoEPConfig) -> None:
+        from deepspeed.module_inject.auto_ep_comm import new_exchange_scope
+
         self.model = model
         self.config = config
+        # One DeepEP sharing scope per converted model. Its layers all want
+        # the same buffer; another model's do not, even on the same group.
+        self.deepep_scope = new_exchange_scope()
         self.model_config = getattr(model, 'config', None)
         self._retargeted_transformers_output_recorders: set[str] = set()
         fill_autoep_config_from_hf(self.config, self.model_config)
@@ -524,6 +529,7 @@ class AutoEP:
             ep_size=ep_size,
             ep_rank=ep_rank,
             config=self.config,
+            deepep_scope=self.deepep_scope,
         )
 
         # Replace in-place on parent
